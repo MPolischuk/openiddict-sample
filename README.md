@@ -51,7 +51,7 @@
 ## 🗂️ Estructura de Directorios
 
 ```
-Zirku/
+src/
 │
 ├── Zirku.Server/                    # Authorization Server (OAuth Provider)
 │   ├── Data/
