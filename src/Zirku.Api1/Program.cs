@@ -58,8 +58,18 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
 builder.Services.AddScoped<PermissionService>();
 
+// Register action filter for permission validation
+builder.Services.AddScoped<PermissionActionFilter>();
+
 builder.Services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
 builder.Services.AddAuthorization();
+
+// Add controllers
+builder.Services.AddControllers(options =>
+{
+    // Agregar el filtro de permisos a todos los controladores
+    options.Filters.AddService<PermissionActionFilter>();
+});
 
 var app = builder.Build();
 
@@ -69,83 +79,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Legacy endpoint (backward compatibility)
-app.MapGet("api", [Authorize] (ClaimsPrincipal user) => $"{user.Identity!.Name} is allowed to access Api1.");
-
-// Module X endpoints
-app.MapGet("api/modulex", [Authorize, RequirePermission(PermissionNames.ModuleXRead)] (ClaimsPrincipal user, PermissionService permissionService) => 
-{
-    var permissions = permissionService.GetUserPermissions(user);
-    return new
-    {
-        module = "X",
-        message = $"Welcome {user.Identity!.Name}! You have access to Module X.",
-        data = new
-        {
-            title = "Module X Data",
-            content = "This is sensitive data from Module X",
-            items = new[] { "Item X1", "Item X2", "Item X3" }
-        },
-        userPermissions = permissions.Where(p => p.StartsWith("ModuleX")).ToList()
-    };
-})
-.AddEndpointFilter<PermissionFilter>();
-
-app.MapPost("api/modulex", [Authorize, RequirePermission(PermissionNames.ModuleXWrite)] (ClaimsPrincipal user, object data) =>
-{
-    return new
-    {
-        success = true,
-        message = $"Data saved to Module X by {user.Identity!.Name}",
-        timestamp = DateTime.UtcNow
-    };
-})
-.AddEndpointFilter<PermissionFilter>();
-
-// Module Y endpoints
-app.MapGet("api/moduley", [Authorize, RequirePermission(PermissionNames.ModuleYRead)] (ClaimsPrincipal user, PermissionService permissionService) =>
-{
-    var permissions = permissionService.GetUserPermissions(user);
-    return new
-    {
-        module = "Y",
-        message = $"Welcome {user.Identity!.Name}! You have access to Module Y.",
-        data = new
-        {
-            title = "Module Y Data",
-            content = "This is sensitive data from Module Y",
-            items = new[] { "Item Y1", "Item Y2", "Item Y3" }
-        },
-        userPermissions = permissions.Where(p => p.StartsWith("ModuleY")).ToList()
-    };
-})
-.AddEndpointFilter<PermissionFilter>();
-
-app.MapPost("api/moduley", [Authorize, RequirePermission(PermissionNames.ModuleYWrite)] (ClaimsPrincipal user, object data) =>
-{
-    return new
-    {
-        success = true,
-        message = $"Data saved to Module Y by {user.Identity!.Name}",
-        timestamp = DateTime.UtcNow
-    };
-})
-.AddEndpointFilter<PermissionFilter>();
-
-// Endpoint to get user permissions (útil para debug y UI)
-app.MapGet("api/permissions", [Authorize] (ClaimsPrincipal user, PermissionService permissionService) =>
-{
-    var permissions = permissionService.GetUserPermissions(user);
-    var roles = user.Claims.Where(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                          .Select(c => c.Value)
-                          .ToList();
-    
-    return new
-    {
-        username = user.Identity!.Name,
-        roles = roles,
-        permissions = permissions.OrderBy(p => p).ToList()
-    };
-});
+// Map controllers
+app.MapControllers();
 
 app.Run();

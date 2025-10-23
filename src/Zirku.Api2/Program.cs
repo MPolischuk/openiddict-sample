@@ -62,8 +62,18 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
 builder.Services.AddScoped<PermissionService>();
 
+// Register action filter for permission validation
+builder.Services.AddScoped<PermissionActionFilter>();
+
 builder.Services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
 builder.Services.AddAuthorization();
+
+// Add controllers
+builder.Services.AddControllers(options =>
+{
+    // Agregar el filtro de permisos a todos los controladores
+    options.Filters.AddService<PermissionActionFilter>();
+});
 
 var app = builder.Build();
 
@@ -73,55 +83,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Legacy endpoint (backward compatibility)
-app.MapGet("api", [Authorize] (ClaimsPrincipal user) => $"{user.Identity!.Name} is allowed to access Api2.");
-
-// Module Z endpoints (primary functionality of Api2)
-app.MapGet("api/modulez", [Authorize, RequirePermission(PermissionNames.ModuleZRead)] (ClaimsPrincipal user, PermissionService permissionService) =>
-{
-    var permissions = permissionService.GetUserPermissions(user);
-    return new
-    {
-        module = "Z",
-        message = $"Welcome {user.Identity!.Name}! You have access to Module Z.",
-        data = new
-        {
-            title = "Module Z Data",
-            content = "This is sensitive data from Module Z (validated locally, not via introspection)",
-            items = new[] { "Item Z1", "Item Z2", "Item Z3" },
-            note = "This API uses local token validation with symmetric encryption key"
-        },
-        userPermissions = permissions.Where(p => p.StartsWith("ModuleZ")).ToList()
-    };
-})
-.AddEndpointFilter<PermissionFilter>();
-
-app.MapPost("api/modulez", [Authorize, RequirePermission(PermissionNames.ModuleZWrite)] (ClaimsPrincipal user, object data) =>
-{
-    return new
-    {
-        success = true,
-        message = $"Data saved to Module Z by {user.Identity!.Name}",
-        timestamp = DateTime.UtcNow
-    };
-})
-.AddEndpointFilter<PermissionFilter>();
-
-// Endpoint to get user permissions
-app.MapGet("api/permissions", [Authorize] (ClaimsPrincipal user, PermissionService permissionService) =>
-{
-    var permissions = permissionService.GetUserPermissions(user);
-    var roles = user.Claims.Where(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                          .Select(c => c.Value)
-                          .ToList();
-    
-    return new
-    {
-        username = user.Identity!.Name,
-        roles = roles,
-        permissions = permissions.OrderBy(p => p).ToList(),
-        apiInfo = "This API uses local token validation (no introspection)"
-    };
-});
+// Map controllers
+app.MapControllers();
 
 app.Run();

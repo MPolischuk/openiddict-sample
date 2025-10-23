@@ -138,6 +138,9 @@ builder.Services.AddAuthorization();
 // Add Razor Pages support
 builder.Services.AddRazorPages();
 
+// Add Controllers support
+builder.Services.AddControllers();
+
 var app = builder.Build();
 
 app.UseCors();
@@ -310,8 +313,8 @@ app.UseAuthorization();
 // Map Razor Pages
 app.MapRazorPages();
 
-app.MapGet("api", [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)]
-(ClaimsPrincipal user) => user.Identity!.Name);
+// Map controllers
+app.MapControllers();
 
 app.MapPost("token", async (
     HttpContext context,
