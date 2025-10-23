@@ -1,11 +1,4 @@
-# 🔐 Zirku - Contexto del Proyecto OAuth 2.0
-
-> **Documento de Contexto para IA**
-> Este archivo contiene toda la información necesaria para que un asistente de IA pueda entender, mantener y evolucionar este proyecto sin necesidad de historial previo.
-
----
-
-## 📋 Resumen Ejecutivo
+## 📋 Resumen 
 
 **Zirku** es un sistema completo de autenticación y autorización implementado con:
 - **OAuth 2.0 / OpenID Connect** usando **OpenIddict 7.1**
