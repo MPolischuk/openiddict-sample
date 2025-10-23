@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
-using Zirku.Data.Repositories;
+using Zirku.Core.Repositories;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
-namespace Zirku.Api2.Services;
+namespace Zirku.Core.Services;
 
 /// <summary>
 /// Servicio para obtener permisos desde la DB con cache
@@ -88,3 +87,4 @@ public class PermissionService
         // Por ahora, simplemente el cache expirará en 5 minutos
     }
 }
+

@@ -1,10 +1,9 @@
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Zirku.Api2.Services;
-using Zirku.Core.Authorization;
+using Zirku.Core.Services;
 
-namespace Zirku.Api2.Authorization;
+namespace Zirku.Core.Authorization;
 
 /// <summary>
 /// Filtro de acción que intercepta controladores con [RequirePermission] y valida los permisos del usuario

@@ -13,6 +13,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zirku.Client1", "Zirku.Clie
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zirku.Client2", "Zirku.Client2\Zirku.Client2.csproj", "{4668AF20-351A-3E28-72C2-A9C5744D1756}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zirku.Core", "Zirku.Core\Zirku.Core.csproj", "{3D375EC7-FD47-E879-B241-489607D75BD4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zirku.Data", "Zirku.Data\Zirku.Data.csproj", "{C2F8957A-8BD1-D3DD-D85C-417B4D2022B8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +43,14 @@ Global
 		{4668AF20-351A-3E28-72C2-A9C5744D1756}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4668AF20-351A-3E28-72C2-A9C5744D1756}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4668AF20-351A-3E28-72C2-A9C5744D1756}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D375EC7-FD47-E879-B241-489607D75BD4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D375EC7-FD47-E879-B241-489607D75BD4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D375EC7-FD47-E879-B241-489607D75BD4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D375EC7-FD47-E879-B241-489607D75BD4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C2F8957A-8BD1-D3DD-D85C-417B4D2022B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2F8957A-8BD1-D3DD-D85C-417B4D2022B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2F8957A-8BD1-D3DD-D85C-417B4D2022B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2F8957A-8BD1-D3DD-D85C-417B4D2022B8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

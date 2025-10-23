@@ -9,10 +9,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Validation.AspNetCore;
-using Zirku.Api2.Authorization;
-using Zirku.Api2.Services;
 using Zirku.Core.Authorization;
 using Zirku.Core.Constants;
+using Zirku.Core.Repositories;
+using Zirku.Core.Services;
 using Zirku.Data;
 using Zirku.Data.Repositories;
 

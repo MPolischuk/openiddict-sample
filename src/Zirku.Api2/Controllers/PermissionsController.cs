@@ -2,7 +2,7 @@ using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Zirku.Api2.Services;
+using Zirku.Core.Services;
 
 namespace Zirku.Api2.Controllers;
 
