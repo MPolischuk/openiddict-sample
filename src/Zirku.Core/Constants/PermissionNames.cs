@@ -1,7 +1,7 @@
-namespace Zirku.Api1.Constants;
+namespace Zirku.Core.Constants;
 
 /// <summary>
-/// Constantes de permisos del sistema (deben coincidir con el servidor)
+/// Constantes de permisos del sistema
 /// </summary>
 public static class PermissionNames
 {

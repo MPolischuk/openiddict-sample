@@ -1,7 +1,7 @@
-namespace Zirku.Api1.Constants;
+namespace Zirku.Core.Constants;
 
 /// <summary>
-/// Constantes de roles del sistema (deben coincidir con el servidor)
+/// Constantes de roles del sistema
 /// </summary>
 public static class RoleNames
 {

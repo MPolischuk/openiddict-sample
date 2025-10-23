@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Zirku.Server.Data;
-using Zirku.Server.Services;
+using Zirku.Data;
+using Zirku.Data.Services;
 
 namespace Zirku.Server.Pages.Account;
 

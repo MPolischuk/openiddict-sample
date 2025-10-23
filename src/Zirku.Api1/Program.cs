@@ -1,13 +1,19 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Validation.AspNetCore;
 using Zirku.Api1.Authorization;
-using Zirku.Api1.Constants;
 using Zirku.Api1.Services;
+using Zirku.Core.Authorization;
+using Zirku.Core.Constants;
+using Zirku.Data;
+using Zirku.Data.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,46 +44,22 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
           .AllowAnyMethod()
           .WithOrigins("http://localhost:5112", "http://localhost:3000")));
 
+// Register database context
+var dbPath = Path.Combine(Path.GetTempPath(), "zirku-application.sqlite3");
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+{
+    options.UseSqlite($"Data Source={dbPath}");
+});
+
 // Register memory cache for permission caching
 builder.Services.AddMemoryCache();
 
-// Register custom services
-builder.Services.AddSingleton<PermissionService>();
-builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
+// Register repositories and services
+builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
+builder.Services.AddScoped<PermissionService>();
 
 builder.Services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
-
-// Configure authorization policies based on permissions
-builder.Services.AddAuthorization(options =>
-{
-    // Module X policies
-    options.AddPolicy("ModuleX.Read", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.ModuleXRead)));
-    
-    options.AddPolicy("ModuleX.Write", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.ModuleXWrite)));
-
-    // Module Y policies
-    options.AddPolicy("ModuleY.Read", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.ModuleYRead)));
-    
-    options.AddPolicy("ModuleY.Write", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.ModuleYWrite)));
-
-    // Module Z policies
-    options.AddPolicy("ModuleZ.Read", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.ModuleZRead)));
-    
-    options.AddPolicy("ModuleZ.Write", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.ModuleZWrite)));
-
-    // Admin policies
-    options.AddPolicy("Admin.ManageUsers", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.AdminManageUsers)));
-    
-    options.AddPolicy("Admin.ManageRoles", policy =>
-        policy.Requirements.Add(new PermissionRequirement(PermissionNames.AdminManageRoles)));
-});
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -91,7 +73,7 @@ app.UseAuthorization();
 app.MapGet("api", [Authorize] (ClaimsPrincipal user) => $"{user.Identity!.Name} is allowed to access Api1.");
 
 // Module X endpoints
-app.MapGet("api/modulex", [Authorize(Policy = "ModuleX.Read")] (ClaimsPrincipal user, PermissionService permissionService) => 
+app.MapGet("api/modulex", [Authorize, RequirePermission(PermissionNames.ModuleXRead)] (ClaimsPrincipal user, PermissionService permissionService) => 
 {
     var permissions = permissionService.GetUserPermissions(user);
     return new
@@ -106,9 +88,10 @@ app.MapGet("api/modulex", [Authorize(Policy = "ModuleX.Read")] (ClaimsPrincipal 
         },
         userPermissions = permissions.Where(p => p.StartsWith("ModuleX")).ToList()
     };
-});
+})
+.AddEndpointFilter<PermissionFilter>();
 
-app.MapPost("api/modulex", [Authorize(Policy = "ModuleX.Write")] (ClaimsPrincipal user, object data) =>
+app.MapPost("api/modulex", [Authorize, RequirePermission(PermissionNames.ModuleXWrite)] (ClaimsPrincipal user, object data) =>
 {
     return new
     {
@@ -116,10 +99,11 @@ app.MapPost("api/modulex", [Authorize(Policy = "ModuleX.Write")] (ClaimsPrincipa
         message = $"Data saved to Module X by {user.Identity!.Name}",
         timestamp = DateTime.UtcNow
     };
-});
+})
+.AddEndpointFilter<PermissionFilter>();
 
 // Module Y endpoints
-app.MapGet("api/moduley", [Authorize(Policy = "ModuleY.Read")] (ClaimsPrincipal user, PermissionService permissionService) =>
+app.MapGet("api/moduley", [Authorize, RequirePermission(PermissionNames.ModuleYRead)] (ClaimsPrincipal user, PermissionService permissionService) =>
 {
     var permissions = permissionService.GetUserPermissions(user);
     return new
@@ -134,9 +118,10 @@ app.MapGet("api/moduley", [Authorize(Policy = "ModuleY.Read")] (ClaimsPrincipal 
         },
         userPermissions = permissions.Where(p => p.StartsWith("ModuleY")).ToList()
     };
-});
+})
+.AddEndpointFilter<PermissionFilter>();
 
-app.MapPost("api/moduley", [Authorize(Policy = "ModuleY.Write")] (ClaimsPrincipal user, object data) =>
+app.MapPost("api/moduley", [Authorize, RequirePermission(PermissionNames.ModuleYWrite)] (ClaimsPrincipal user, object data) =>
 {
     return new
     {
@@ -144,7 +129,8 @@ app.MapPost("api/moduley", [Authorize(Policy = "ModuleY.Write")] (ClaimsPrincipa
         message = $"Data saved to Module Y by {user.Identity!.Name}",
         timestamp = DateTime.UtcNow
     };
-});
+})
+.AddEndpointFilter<PermissionFilter>();
 
 // Endpoint to get user permissions (útil para debug y UI)
 app.MapGet("api/permissions", [Authorize] (ClaimsPrincipal user, PermissionService permissionService) =>

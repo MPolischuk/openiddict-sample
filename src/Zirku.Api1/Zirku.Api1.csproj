@@ -9,4 +9,9 @@
     <PackageReference Include="OpenIddict.Validation.SystemNetHttp" Version="7.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Zirku.Core\Zirku.Core.csproj" />
+    <ProjectReference Include="..\Zirku.Data\Zirku.Data.csproj" />
+  </ItemGroup>
+
 </Project>

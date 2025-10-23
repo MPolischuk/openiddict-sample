@@ -2,59 +2,30 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
-using Zirku.Api1.Constants;
+using Zirku.Data.Repositories;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Zirku.Api1.Services;
 
 /// <summary>
-/// Servicio para mapear roles a permisos con cache
+/// Servicio para obtener permisos desde la DB con cache
 /// </summary>
 public class PermissionService
 {
+    private readonly IPermissionRepository _permissionRepository;
     private readonly IMemoryCache _cache;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
-    // Mapeo estático de roles a permisos (en producción podría venir de DB)
-    private static readonly Dictionary<string, HashSet<string>> RolePermissionsMap = new()
+    public PermissionService(IPermissionRepository permissionRepository, IMemoryCache cache)
     {
-        [RoleNames.Administrator] = new HashSet<string>
-        {
-            PermissionNames.ModuleXRead,
-            PermissionNames.ModuleXWrite,
-            PermissionNames.ModuleYRead,
-            PermissionNames.ModuleYWrite,
-            PermissionNames.ModuleZRead,
-            PermissionNames.ModuleZWrite,
-            PermissionNames.AdminManageUsers,
-            PermissionNames.AdminManageRoles
-        },
-        [RoleNames.PowerUser] = new HashSet<string>
-        {
-            PermissionNames.ModuleXRead,
-            PermissionNames.ModuleXWrite,
-            PermissionNames.ModuleYRead,
-            PermissionNames.ModuleYWrite
-        },
-        [RoleNames.BasicUser] = new HashSet<string>
-        {
-            PermissionNames.ModuleXRead
-        },
-        [RoleNames.ModuleZUser] = new HashSet<string>
-        {
-            PermissionNames.ModuleZRead,
-            PermissionNames.ModuleZWrite
-        }
-    };
-
-    public PermissionService(IMemoryCache cache)
-    {
+        _permissionRepository = permissionRepository;
         _cache = cache;
     }
 
     /// <summary>
-    /// Verifica si el usuario tiene un permiso específico
+    /// Verifica si el usuario tiene un permiso específico (lee de DB con cache)
     /// </summary>
     public bool UserHasPermission(ClaimsPrincipal user, string permission)
     {
@@ -70,24 +41,14 @@ public class PermissionService
         if (!roles.Any())
             return false;
 
-        // Crear cache key basado en roles
-        var cacheKey = $"permissions_{string.Join(",", roles.OrderBy(r => r))}";
+        // Obtener permisos (con cache)
+        var permissions = GetUserPermissions(user);
 
-        // Intentar obtener del cache
-        if (!_cache.TryGetValue<HashSet<string>>(cacheKey, out var permissions))
-        {
-            // No está en cache, calcular permisos
-            permissions = GetPermissionsForRoles(roles);
-
-            // Guardar en cache
-            _cache.Set(cacheKey, permissions, CacheDuration);
-        }
-
-        return permissions?.Contains(permission) ?? false;
+        return permissions.Contains(permission);
     }
 
     /// <summary>
-    /// Obtiene todos los permisos de un usuario
+    /// Obtiene todos los permisos de un usuario desde la DB (con cache)
     /// </summary>
     public HashSet<string> GetUserPermissions(ClaimsPrincipal user)
     {
@@ -102,33 +63,20 @@ public class PermissionService
         if (!roles.Any())
             return new HashSet<string>();
 
+        // Crear cache key basado en roles
         var cacheKey = $"permissions_{string.Join(",", roles.OrderBy(r => r))}";
 
+        // Intentar obtener del cache
         if (!_cache.TryGetValue<HashSet<string>>(cacheKey, out var permissions))
         {
-            permissions = GetPermissionsForRoles(roles);
+            // No está en cache, obtener de DB
+            permissions = _permissionRepository.GetPermissionsByRolesAsync(roles).GetAwaiter().GetResult();
+
+            // Guardar en cache
             _cache.Set(cacheKey, permissions, CacheDuration);
         }
 
         return permissions ?? new HashSet<string>();
-    }
-
-    /// <summary>
-    /// Calcula los permisos acumulados de múltiples roles
-    /// </summary>
-    private static HashSet<string> GetPermissionsForRoles(IEnumerable<string> roles)
-    {
-        var allPermissions = new HashSet<string>();
-
-        foreach (var role in roles)
-        {
-            if (RolePermissionsMap.TryGetValue(role, out var rolePermissions))
-            {
-                allPermissions.UnionWith(rolePermissions);
-            }
-        }
-
-        return allPermissions;
     }
 
     /// <summary>
@@ -140,4 +88,3 @@ public class PermissionService
         // Por ahora, simplemente el cache expirará en 5 minutos
     }
 }
-

@@ -18,8 +18,9 @@ using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
 using Quartz;
-using Zirku.Server.Data;
-using Zirku.Server.Services;
+using Zirku.Core.Constants;
+using Zirku.Data;
+using Zirku.Data.Services;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,7 +36,7 @@ builder.Services.AddQuartz(options =>
 // Register the Quartz.NET service and configure it to block shutdown until jobs are complete.
 builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
-// Register ApplicationDbContext for users, roles, permissions
+// Register ApplicationDbContext for users, roles, permissions (from Zirku.Data)
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     options.UseSqlite($"Filename={Path.Combine(Path.GetTempPath(), "zirku-application.sqlite3")}");

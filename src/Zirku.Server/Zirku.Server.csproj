@@ -21,4 +21,9 @@
     <PackageReference Include="System.Linq.Async" Version="6.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Zirku.Core\Zirku.Core.csproj" />
+    <ProjectReference Include="..\Zirku.Data\Zirku.Data.csproj" />
+  </ItemGroup>
+
 </Project>
