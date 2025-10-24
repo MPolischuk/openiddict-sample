@@ -24,7 +24,7 @@ builder.Services.AddOpenIddict()
     {
         // Note: the validation handler uses OpenID Connect discovery
         // to retrieve the issuer signing keys used to validate tokens.
-        options.SetIssuer("https://localhost:44319/");
+        options.SetIssuer("https://localhost:5173/");
         options.AddAudiences("resource_server_2");
 
         // Register the encryption credentials. This sample uses a symmetric
