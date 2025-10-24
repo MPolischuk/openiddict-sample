@@ -54,6 +54,33 @@ const createApiClient = (baseURL: string): AxiosInstance => {
 const api1Client = createApiClient(apiConfig.api1BaseUrl);
 const api2Client = createApiClient(apiConfig.api2BaseUrl);
 
+// Create auth server client
+const authServerClient = axios.create({
+  baseURL: 'https://localhost:5173',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor to attach access token
+authServerClient.interceptors.request.use(
+  async (config) => {
+    const user = await userManager.getUser();
+    if (user && user.access_token) {
+      config.headers.Authorization = `Bearer ${user.access_token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Auth Server endpoints
+export const authServer = {
+  getPermissions: () => authServerClient.get<{ permissions: string[] }>('/api/permissions'),
+};
+
 // API1 endpoints
 export const api1 = {
   getModuleX: () => api1Client.get('/api/modulex'),

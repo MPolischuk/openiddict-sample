@@ -1,36 +1,20 @@
-// Mapeo de roles a permisos (debe coincidir con el servidor)
-const rolePermissionsMap: Record<string, string[]> = {
-  Administrator: [
-    'ModuleX.Read',
-    'ModuleX.Write',
-    'ModuleY.Read',
-    'ModuleY.Write',
-    'ModuleZ.Read',
-    'ModuleZ.Write',
-    'Admin.ManageUsers',
-    'Admin.ManageRoles',
-  ],
-  PowerUser: [
-    'ModuleX.Read',
-    'ModuleX.Write',
-    'ModuleY.Read',
-    'ModuleY.Write',
-  ],
-  BasicUser: ['ModuleX.Read'],
-  ModuleZUser: ['ModuleZ.Read', 'ModuleZ.Write'],
+// Get permissions from localStorage (fetched from server)
+const getStoredPermissions = (): string[] => {
+  try {
+    const permissionsJson = localStorage.getItem('user_permissions');
+    if (permissionsJson) {
+      return JSON.parse(permissionsJson);
+    }
+  } catch (error) {
+    console.error('Error reading permissions from localStorage:', error);
+  }
+  return [];
 };
 
+// This function is now just a wrapper that returns stored permissions
+// Roles parameter is kept for backward compatibility but not used
 export const getPermissionsForRoles = (roles: string[]): string[] => {
-  const permissions = new Set<string>();
-
-  roles.forEach((role) => {
-    const rolePerms = rolePermissionsMap[role];
-    if (rolePerms) {
-      rolePerms.forEach((perm) => permissions.add(perm));
-    }
-  });
-
-  return Array.from(permissions);
+  return getStoredPermissions();
 };
 
 export const hasPermission = (roles: string[], permission: string): boolean => {

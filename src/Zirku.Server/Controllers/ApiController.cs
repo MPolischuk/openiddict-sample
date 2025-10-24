@@ -1,25 +1,48 @@
+using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Validation.AspNetCore;
+using Zirku.Core.Services;
 
 namespace Zirku.Server.Controllers;
 
 /// <summary>
-/// Controlador de prueba para verificar autenticación
+/// Controlador de API para operaciones autenticadas
 /// </summary>
 [ApiController]
-[Route("[controller]")]
+[Route("api")]
 [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)]
 public class ApiController : ControllerBase
 {
+    private readonly PermissionService _permissionService;
+
+    public ApiController(PermissionService permissionService)
+    {
+        _permissionService = permissionService;
+    }
+
     /// <summary>
     /// Endpoint de prueba para verificar que el usuario está autenticado
     /// </summary>
-    [HttpGet]
+    [HttpGet("test")]
     public IActionResult Get()
     {
         return Ok(User.Identity!.Name);
+    }
+
+    /// <summary>
+    /// Obtiene los permisos del usuario autenticado basándose en sus roles
+    /// </summary>
+    [HttpGet("permissions")]
+    public IActionResult GetPermissions()
+    {
+        var permissions = _permissionService.GetUserPermissions(User);
+        
+        return Ok(new
+        {
+            permissions = permissions.OrderBy(p => p).ToArray()
+        });
     }
 }
 

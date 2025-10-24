@@ -1,6 +1,28 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, UserManager } from 'oidc-client-ts';
 import { oidcConfig } from '../config/authConfig';
+import { authServer } from '../services/apiService';
+
+// Helper function to fetch and store permissions
+const fetchAndStorePermissions = async (user: User) => {
+  if (!user || !user.access_token) {
+    localStorage.removeItem('user_permissions');
+    return;
+  }
+
+  try {
+    console.log('🔑 Fetching permissions from server...');
+    const response = await authServer.getPermissions();
+    const permissions = response.data.permissions || [];
+    
+    console.log('✅ Permissions fetched:', permissions);
+    localStorage.setItem('user_permissions', JSON.stringify(permissions));
+  } catch (error) {
+    console.error('❌ Failed to fetch permissions:', error);
+    // If we can't fetch permissions, clear them
+    localStorage.removeItem('user_permissions');
+  }
+};
 
 interface AuthContextType {
   user: User | null;
@@ -22,19 +44,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check if user is already authenticated
-    userManager.getUser().then((user) => {
+    userManager.getUser().then(async (user) => {
       setUser(user);
+      if (user) {
+        await fetchAndStorePermissions(user);
+      }
       setIsLoading(false);
     });
 
     // Listen for user loaded event
-    userManager.events.addUserLoaded((user) => {
+    userManager.events.addUserLoaded(async (user) => {
       setUser(user);
+      if (user) {
+        await fetchAndStorePermissions(user);
+      }
     });
 
     // Listen for user unloaded event
     userManager.events.addUserUnloaded(() => {
       setUser(null);
+      localStorage.removeItem('user_permissions');
     });
 
     // Listen for silent renew error
@@ -95,16 +124,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await userManager.removeUser();
       console.log('✅ UserManager cleared');
       
-      // 3. Clear all oidc-related items from localStorage
+      // 3. Clear all oidc-related items and permissions from localStorage
       console.log('🗄️ Clearing localStorage...');
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith('oidc.')) {
+        if (key && (key.startsWith('oidc.') || key === 'user_permissions')) {
           keysToRemove.push(key);
         }
       }
-      console.log(`Found ${keysToRemove.length} oidc keys to remove:`, keysToRemove);
+      console.log(`Found ${keysToRemove.length} keys to remove:`, keysToRemove);
       keysToRemove.forEach(key => localStorage.removeItem(key));
       console.log('✅ localStorage cleared');
       

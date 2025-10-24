@@ -21,7 +21,10 @@ using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
 using Quartz;
 using Zirku.Core.Constants;
+using Zirku.Core.Repositories;
+using Zirku.Core.Services;
 using Zirku.Data;
+using Zirku.Data.Repositories;
 using Zirku.Data.Services;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -71,6 +74,9 @@ builder.Services.AddDbContext<DbContext>(options =>
 
 // Register custom services
 builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
+builder.Services.AddScoped<PermissionService>();
 
 builder.Services.AddOpenIddict()
 
