@@ -1,4 +1,5 @@
 import type { UserManagerSettings } from 'oidc-client-ts';
+import { WebStorageStateStore } from 'oidc-client-ts';
 
 const authority = 'https://localhost:5173';
 const clientId = 'react_client';
@@ -18,8 +19,8 @@ export const oidcConfig: UserManagerSettings = {
   // Automatic silent renew
   automaticSilentRenew: true,
   
-  // Store tokens in session storage
-  userStore: undefined, // Uses default (session storage)
+  // Store tokens and user data in localStorage instead of sessionStorage
+  userStore: new WebStorageStateStore({ store: window.localStorage }),
   
   // Token lifetimes
   accessTokenExpiringNotificationTimeInSeconds: 60,

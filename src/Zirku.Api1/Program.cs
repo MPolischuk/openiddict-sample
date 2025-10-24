@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Validation.AspNetCore;
 using Zirku.Core.Authorization;
@@ -17,20 +18,27 @@ using Zirku.Data.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Read configuration
+var issuer = builder.Configuration["OpenIddict:Issuer"] ?? throw new InvalidOperationException("OpenIddict:Issuer not configured");
+var audience = builder.Configuration["OpenIddict:Audience"] ?? throw new InvalidOperationException("OpenIddict:Audience not configured");
+var clientId = builder.Configuration["OpenIddict:ClientId"] ?? throw new InvalidOperationException("OpenIddict:ClientId not configured");
+var clientSecret = builder.Configuration["OpenIddict:ClientSecret"] ?? throw new InvalidOperationException("OpenIddict:ClientSecret not configured");
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+
 // Register the OpenIddict validation components.
 builder.Services.AddOpenIddict()
     .AddValidation(options =>
     {
         // Note: the validation handler uses OpenID Connect discovery
         // to retrieve the address of the introspection endpoint.
-        options.SetIssuer("https://localhost:5173/");
-        options.AddAudiences("resource_server_1");
+        options.SetIssuer(issuer);
+        options.AddAudiences(audience);
 
         // Configure the validation handler to use introspection and register the client
         // credentials used when communicating with the remote introspection endpoint.
         options.UseIntrospection()
-               .SetClientId("resource_server_1")
-               .SetClientSecret("846B62D0-DEF9-4215-A99D-86E6B8DAB342");
+               .SetClientId(clientId)
+               .SetClientSecret(clientSecret);
 
         // Register the System.Net.Http integration.
         options.UseSystemNetHttp();
@@ -42,10 +50,15 @@ builder.Services.AddOpenIddict()
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.AllowAnyHeader()
           .AllowAnyMethod()
-          .WithOrigins("http://localhost:5112", "http://localhost:3000")));
+          .WithOrigins(allowedOrigins)));
 
 // Register database context
-var dbPath = Path.Combine(Path.GetTempPath(), "zirku-application.sqlite3");
+var dbFileName = builder.Configuration["Database:Path"] ?? "zirku-application.sqlite3";
+var useTemporaryDirectory = builder.Configuration.GetValue<bool>("Database:UseTemporaryDirectory", true);
+var dbPath = useTemporaryDirectory 
+    ? Path.Combine(Path.GetTempPath(), dbFileName)
+    : dbFileName;
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     options.UseSqlite($"Data Source={dbPath}");

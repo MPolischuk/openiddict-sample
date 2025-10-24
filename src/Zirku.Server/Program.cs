@@ -12,7 +12,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
@@ -36,17 +38,30 @@ builder.Services.AddQuartz(options =>
 // Register the Quartz.NET service and configure it to block shutdown until jobs are complete.
 builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
+// Read database configuration
+var appDbFileName = builder.Configuration["Database:ApplicationDb:Path"] ?? "zirku-application.sqlite3";
+var appDbUseTemp = builder.Configuration.GetValue<bool>("Database:ApplicationDb:UseTemporaryDirectory", true);
+var appDbPath = appDbUseTemp 
+    ? Path.Combine(Path.GetTempPath(), appDbFileName)
+    : appDbFileName;
+
+var oidcDbFileName = builder.Configuration["Database:OpenIddictDb:Path"] ?? "openiddict-zirku-server.sqlite3";
+var oidcDbUseTemp = builder.Configuration.GetValue<bool>("Database:OpenIddictDb:UseTemporaryDirectory", true);
+var oidcDbPath = oidcDbUseTemp 
+    ? Path.Combine(Path.GetTempPath(), oidcDbFileName)
+    : oidcDbFileName;
+
 // Register ApplicationDbContext for users, roles, permissions (from Zirku.Data)
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    options.UseSqlite($"Filename={Path.Combine(Path.GetTempPath(), "zirku-application.sqlite3")}");
+    options.UseSqlite($"Filename={appDbPath}");
 });
 
 // Register OpenIddict DbContext (separate for OAuth data)
 builder.Services.AddDbContext<DbContext>(options =>
 {
     // Configure the context to use sqlite.
-    options.UseSqlite($"Filename={Path.Combine(Path.GetTempPath(), "openiddict-zirku-server.sqlite3")}");
+    options.UseSqlite($"Filename={oidcDbPath}");
 
     // Register the entity sets needed by OpenIddict.
     // Note: use the generic overload if you need
@@ -69,7 +84,7 @@ builder.Services.AddOpenIddict()
     // Register the OpenIddict server components.
     .AddServer(options =>
     {
-        // Enable the authorization, introspection, token and userinfo endpoints.
+        // Enable the authorization, introspection, token, userinfo and logout endpoints.
         options.SetAuthorizationEndpointUris("authorize")
                .SetIntrospectionEndpointUris("introspect")
                .SetTokenEndpointUris("token")
@@ -87,15 +102,18 @@ builder.Services.AddOpenIddict()
         //
         // Note: in a real world application, this encryption key should be
         // stored in a safe place (e.g in Azure KeyVault, stored as a secret).
+        var encryptionKey = builder.Configuration["OpenIddict:EncryptionKey"] ?? throw new InvalidOperationException("OpenIddict:EncryptionKey not configured");
         options.AddEncryptionKey(new SymmetricSecurityKey(
-            Convert.FromBase64String("DRjd/GnduI3Efzen9V9BvbNUfc/VKgXltV7Kbk9sMkY=")));
+            Convert.FromBase64String(encryptionKey)));
 
         // Register the signing credentials.
         options.AddDevelopmentSigningCertificate();
 
         // Configure token lifetimes
-        options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));  // Short-lived access tokens
-        options.SetRefreshTokenLifetime(TimeSpan.FromDays(7));     // Long-lived refresh tokens
+        var accessTokenLifetimeMinutes = builder.Configuration.GetValue<int>("Tokens:AccessTokenLifetimeMinutes", 15);
+        var refreshTokenLifetimeDays = builder.Configuration.GetValue<int>("Tokens:RefreshTokenLifetimeDays", 7);
+        options.SetAccessTokenLifetime(TimeSpan.FromMinutes(accessTokenLifetimeMinutes));  // Short-lived access tokens
+        options.SetRefreshTokenLifetime(TimeSpan.FromDays(refreshTokenLifetimeDays));     // Long-lived refresh tokens
 
         // Register the ASP.NET Core host and configure the ASP.NET Core-specific options.
         //
@@ -106,7 +124,7 @@ builder.Services.AddOpenIddict()
         //
         options.UseAspNetCore()
                .EnableAuthorizationEndpointPassthrough()
-               .EnableTokenEndpointPassthrough();  // Enable para refresh token personalizado
+               .EnableTokenEndpointPassthrough();
     })
 
     // Register the OpenIddict validation components.
@@ -127,19 +145,20 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LogoutPath = "/Account/Logout";
         options.ExpireTimeSpan = TimeSpan.FromHours(1);
         options.SlidingExpiration = true;
+        
+        // Configure cookie to work cross-origin (for logout endpoint)
+        options.Cookie.SameSite = SameSiteMode.None;  // Permite envío cross-origin
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;  // Requiere HTTPS
     });
+
+// Read CORS configuration
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.AllowAnyHeader()
           .AllowAnyMethod()
-          .WithOrigins(
-              "http://localhost:5112",   // Client2
-              "http://localhost:3000",   // React client (zirku-react-client)
-              "http://localhost:5001",   // Api1 HTTP
-              "https://localhost:5002",  // Api1 HTTPS
-              "http://localhost:5003",   // Api2 HTTP
-              "https://localhost:5004"   // Api2 HTTPS
-          )));
+          .AllowCredentials()  // ← IMPORTANTE: Permite enviar cookies
+          .WithOrigins(allowedOrigins)));
 
 builder.Services.AddAuthorization();
 
@@ -492,17 +511,25 @@ app.MapPost("token", async (
 app.MapMethods("authorize", [HttpMethods.Get, HttpMethods.Post], async (
     HttpContext context,
     IOpenIddictScopeManager scopeManager,
-    ApplicationDbContext dbContext) =>
+    ApplicationDbContext dbContext,
+    ILogger<Program> logger) =>
 {
     // Retrieve the OpenIddict server request from the HTTP context.
     var request = context.GetOpenIddictServerRequest() ??
             throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
 
+    logger.LogInformation("Authorization endpoint called for client: {ClientId}", request.ClientId);
+
     // Check if the user is authenticated (has a cookie session)
     var cookieResult = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     
+    logger.LogInformation("Cookie authentication result - Succeeded: {Succeeded}, User: {UserName}", 
+        cookieResult?.Succeeded, 
+        cookieResult?.Principal?.Identity?.Name);
+    
     if (cookieResult?.Succeeded != true)
     {
+        logger.LogInformation("User not authenticated, redirecting to login page");
         // User is not authenticated, redirect to login page
         // Store the original request in a return URL
         return Results.Challenge(
@@ -625,5 +652,25 @@ app.MapGet("userinfo", async (HttpContext context) =>
 
     return Results.Ok(claims);
 }).RequireAuthorization();
+
+// Simple logout endpoint to clear server session cookies
+app.MapPost("/api/logout", async (HttpContext context, ILogger<Program> logger) =>
+{
+    logger.LogInformation("Logout endpoint called");
+    
+    // Check if user is authenticated before logout
+    var isAuthenticated = context.User?.Identity?.IsAuthenticated ?? false;
+    logger.LogInformation($"User authenticated before logout: {isAuthenticated}");
+    
+    // Sign out from cookie authentication (clears .AspNetCore.Cookies)
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    
+    logger.LogInformation("SignOutAsync completed, cookies should be cleared");
+    
+    return Results.Ok(new { 
+        message = "Logged out successfully",
+        wasAuthenticated = isAuthenticated 
+    });
+}).AllowAnonymous();
 
 app.Run();

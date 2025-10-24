@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Validation.AspNetCore;
@@ -18,14 +19,20 @@ using Zirku.Data.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Read configuration
+var issuer = builder.Configuration["OpenIddict:Issuer"] ?? throw new InvalidOperationException("OpenIddict:Issuer not configured");
+var audience = builder.Configuration["OpenIddict:Audience"] ?? throw new InvalidOperationException("OpenIddict:Audience not configured");
+var encryptionKey = builder.Configuration["OpenIddict:EncryptionKey"] ?? throw new InvalidOperationException("OpenIddict:EncryptionKey not configured");
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+
 // Register the OpenIddict validation components.
 builder.Services.AddOpenIddict()
     .AddValidation(options =>
     {
         // Note: the validation handler uses OpenID Connect discovery
         // to retrieve the issuer signing keys used to validate tokens.
-        options.SetIssuer("https://localhost:5173/");
-        options.AddAudiences("resource_server_2");
+        options.SetIssuer(issuer);
+        options.AddAudiences(audience);
 
         // Register the encryption credentials. This sample uses a symmetric
         // encryption key that is shared between the server and the Api2 sample
@@ -34,7 +41,7 @@ builder.Services.AddOpenIddict()
         // Note: in a real world application, this encryption key should be
         // stored in a safe place (e.g in Azure KeyVault, stored as a secret).
         options.AddEncryptionKey(new SymmetricSecurityKey(
-            Convert.FromBase64String("DRjd/GnduI3Efzen9V9BvbNUfc/VKgXltV7Kbk9sMkY=")));
+            Convert.FromBase64String(encryptionKey)));
 
         // Register the System.Net.Http integration.
         options.UseSystemNetHttp();
@@ -46,10 +53,15 @@ builder.Services.AddOpenIddict()
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.AllowAnyHeader()
           .AllowAnyMethod()
-          .WithOrigins("http://localhost:5112", "http://localhost:3000")));
+          .WithOrigins(allowedOrigins)));
 
 // Register database context
-var dbPath = Path.Combine(Path.GetTempPath(), "zirku-application.sqlite3");
+var dbFileName = builder.Configuration["Database:Path"] ?? "zirku-application.sqlite3";
+var useTemporaryDirectory = builder.Configuration.GetValue<bool>("Database:UseTemporaryDirectory", true);
+var dbPath = useTemporaryDirectory 
+    ? Path.Combine(Path.GetTempPath(), dbFileName)
+    : dbFileName;
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     options.UseSqlite($"Data Source={dbPath}");
