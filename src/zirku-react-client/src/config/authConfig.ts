@@ -1,6 +1,6 @@
 import type { UserManagerSettings } from 'oidc-client-ts';
 
-const authority = 'https://localhost:44319';
+const authority = 'https://localhost:5173';
 const clientId = 'react_client';
 const redirectUri = `${window.location.origin}/callback`;
 const silentRenewUri = `${window.location.origin}/silent-renew`;
@@ -35,7 +35,7 @@ export const oidcConfig: UserManagerSettings = {
 };
 
 export const apiConfig = {
-  api1BaseUrl: 'https://localhost:44342',
-  api2BaseUrl: 'https://localhost:44379',
+  api1BaseUrl: 'https://localhost:5002',
+  api2BaseUrl: 'https://localhost:5004',
 };
 

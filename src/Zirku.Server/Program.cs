@@ -69,10 +69,11 @@ builder.Services.AddOpenIddict()
     // Register the OpenIddict server components.
     .AddServer(options =>
     {
-        // Enable the authorization, introspection and token endpoints.
+        // Enable the authorization, introspection, token and userinfo endpoints.
         options.SetAuthorizationEndpointUris("authorize")
                .SetIntrospectionEndpointUris("introspect")
-               .SetTokenEndpointUris("token");
+               .SetTokenEndpointUris("token")
+               .SetUserInfoEndpointUris("userinfo");
 
         // Note: this sample only uses the authorization code and refresh token
         // flows but you can enable the other flows if you need to support implicit,
@@ -131,7 +132,14 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.AllowAnyHeader()
           .AllowAnyMethod()
-          .WithOrigins("http://localhost:5112", "http://localhost:3000")));  // Added React default port
+          .WithOrigins(
+              "http://localhost:5112",   // Client2
+              "http://localhost:3000",   // React client (zirku-react-client)
+              "http://localhost:5001",   // Api1 HTTP
+              "https://localhost:5002",  // Api1 HTTPS
+              "http://localhost:5003",   // Api2 HTTP
+              "https://localhost:5004"   // Api2 HTTPS
+          )));
 
 builder.Services.AddAuthorization();
 
@@ -281,11 +289,55 @@ await using (var scope = app.Services.CreateAsyncScope())
     {
         var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
 
+        // Register OpenID Connect standard scopes
+        if (await manager.FindByNameAsync(Scopes.OpenId) is null)
+        {
+            await manager.CreateAsync(new OpenIddictScopeDescriptor
+            {
+                Name = Scopes.OpenId,
+                DisplayName = "OpenID Connect",
+                Description = "OpenID Connect scope"
+            });
+        }
+
+        if (await manager.FindByNameAsync(Scopes.Email) is null)
+        {
+            await manager.CreateAsync(new OpenIddictScopeDescriptor
+            {
+                Name = Scopes.Email,
+                DisplayName = "Email",
+                Description = "Access to your email address"
+            });
+        }
+
+        if (await manager.FindByNameAsync(Scopes.Profile) is null)
+        {
+            await manager.CreateAsync(new OpenIddictScopeDescriptor
+            {
+                Name = Scopes.Profile,
+                DisplayName = "Profile",
+                Description = "Access to your profile information"
+            });
+        }
+
+        if (await manager.FindByNameAsync(Scopes.Roles) is null)
+        {
+            await manager.CreateAsync(new OpenIddictScopeDescriptor
+            {
+                Name = Scopes.Roles,
+                DisplayName = "Roles",
+                Description = "Access to your roles"
+            });
+        }
+
+        // Register custom API scopes
         if (await manager.FindByNameAsync("api1") is null)
         {
             await manager.CreateAsync(new OpenIddictScopeDescriptor
             {
                 Name = "api1",
+                DisplayName = "API 1",
+                Description = "Access to API 1 resources",
                 Resources =
                 {
                     "resource_server_1"
@@ -298,6 +350,8 @@ await using (var scope = app.Services.CreateAsyncScope())
             await manager.CreateAsync(new OpenIddictScopeDescriptor
             {
                 Name = "api2",
+                DisplayName = "API 2",
+                Description = "Access to API 2 resources",
                 Resources =
                 {
                     "resource_server_2"
@@ -322,6 +376,39 @@ app.MapPost("token", async (
 {
     var request = context.GetOpenIddictServerRequest() ??
         throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
+
+    // Handle authorization code grant (login flow)
+    if (request.IsAuthorizationCodeGrantType())
+    {
+        // Retrieve the claims principal stored in the authorization code
+        var result = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        
+        if (result?.Principal == null)
+        {
+            return Results.Forbid(
+                authenticationSchemes: [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme],
+                properties: new AuthenticationProperties(new Dictionary<string, string?>
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The authorization code is no longer valid."
+                }));
+        }
+
+        // Create a new identity based on the claims principal
+        var identity = new ClaimsIdentity(result.Principal.Identity);
+
+        // Set destinations for claims
+        identity.SetDestinations(claim => claim.Type switch
+        {
+            Claims.Subject => [Destinations.AccessToken],
+            Claims.Name or Claims.Email or Claims.PreferredUsername 
+                => [Destinations.AccessToken, Destinations.IdentityToken],
+            Claims.Role => [Destinations.AccessToken, Destinations.IdentityToken],
+            _ => [Destinations.AccessToken]
+        });
+
+        return Results.SignIn(new ClaimsPrincipal(identity), properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    }
 
     // Handle refresh token grant
     if (request.IsRefreshTokenGrantType())
@@ -385,14 +472,14 @@ app.MapPost("token", async (
             Claims.Subject => [Destinations.AccessToken],
             Claims.Name or Claims.Email or Claims.PreferredUsername 
                 => [Destinations.AccessToken, Destinations.IdentityToken],
-            Claims.Role => [Destinations.AccessToken],
+            Claims.Role => [Destinations.AccessToken, Destinations.IdentityToken],
             _ => [Destinations.AccessToken]
         });
 
         return Results.SignIn(new ClaimsPrincipal(identity), properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
-    // For other grant types, let OpenIddict handle them automatically
+    // For other grant types, return error
     return Results.Forbid(
         authenticationSchemes: [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme],
         properties: new AuthenticationProperties(new Dictionary<string, string?>
@@ -487,8 +574,8 @@ app.MapMethods("authorize", [HttpMethods.Get, HttpMethods.Post], async (
         Claims.Name or Claims.Email or Claims.PreferredUsername 
             => [Destinations.AccessToken, Destinations.IdentityToken],
         
-        // Roles only in access token (for API authorization)
-        Claims.Role => [Destinations.AccessToken],
+        // Roles in both tokens (for frontend and API authorization)
+        Claims.Role => [Destinations.AccessToken, Destinations.IdentityToken],
         
         // Default: access token only
         _ => [Destinations.AccessToken]
@@ -496,5 +583,47 @@ app.MapMethods("authorize", [HttpMethods.Get, HttpMethods.Post], async (
 
     return Results.SignIn(new ClaimsPrincipal(identity), properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
 });
+
+app.MapGet("userinfo", async (HttpContext context) =>
+{
+    // Authenticate the request
+    var result = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    
+    if (result?.Principal == null)
+    {
+        return Results.Challenge(
+            authenticationSchemes: [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme],
+            properties: new AuthenticationProperties(new Dictionary<string, string?>
+            {
+                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidToken,
+                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The specified access token is invalid."
+            }));
+    }
+
+    // Return the claims as a dictionary
+    var claims = new Dictionary<string, object>(StringComparer.Ordinal)
+    {
+        [Claims.Subject] = result.Principal.GetClaim(Claims.Subject) ?? string.Empty
+    };
+
+    // Add optional claims
+    if (result.Principal.HasScope(Scopes.Profile))
+    {
+        claims[Claims.Name] = result.Principal.GetClaim(Claims.Name) ?? string.Empty;
+        claims[Claims.PreferredUsername] = result.Principal.GetClaim(Claims.PreferredUsername) ?? string.Empty;
+    }
+
+    if (result.Principal.HasScope(Scopes.Email))
+    {
+        claims[Claims.Email] = result.Principal.GetClaim(Claims.Email) ?? string.Empty;
+    }
+
+    if (result.Principal.HasScope(Scopes.Roles))
+    {
+        claims[Claims.Role] = result.Principal.GetClaims(Claims.Role).ToArray();
+    }
+
+    return Results.Ok(claims);
+}).RequireAuthorization();
 
 app.Run();
