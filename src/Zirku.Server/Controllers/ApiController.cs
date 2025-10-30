@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Validation.AspNetCore;
@@ -35,9 +36,9 @@ public class ApiController : ControllerBase
     /// Obtiene los permisos del usuario autenticado basándose en sus roles
     /// </summary>
     [HttpGet("permissions")]
-    public IActionResult GetPermissions()
+    public async Task<IActionResult> GetPermissions()
     {
-        var permissions = _permissionService.GetUserPermissions(User);
+        var permissions = await _permissionService.GetUserPermissionsAsync(User);
         
         return Ok(new
         {

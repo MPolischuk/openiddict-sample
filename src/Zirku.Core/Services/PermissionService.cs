@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Zirku.Core.Repositories;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -24,24 +25,31 @@ public class PermissionService
     }
 
     /// <summary>
-    /// Verifica si el usuario tiene un permiso específico (lee de DB con cache)
+    /// Extrae los roles del usuario desde los claims del token
     /// </summary>
-    public bool UserHasPermission(ClaimsPrincipal user, string permission)
+    private static List<string> GetUserRoles(ClaimsPrincipal user)
     {
         if (user?.Identity?.IsAuthenticated != true)
-            return false;
+            return new List<string>();
 
-        // Obtener roles del usuario desde los claims del token
-        var roles = user.Claims
+        return user.Claims
             .Where(c => c.Type == Claims.Role)
             .Select(c => c.Value)
             .ToList();
+    }
 
+    /// <summary>
+    /// Verifica si el usuario tiene un permiso específico (lee de DB con cache)
+    /// </summary>
+    public async Task<bool> UserHasPermissionAsync(ClaimsPrincipal user, string permission)
+    {
+        var roles = GetUserRoles(user);
+        
         if (!roles.Any())
             return false;
 
         // Obtener permisos (con cache)
-        var permissions = GetUserPermissions(user);
+        var permissions = await GetUserPermissionsAsync(user, roles);
 
         return permissions.Contains(permission);
     }
@@ -49,16 +57,21 @@ public class PermissionService
     /// <summary>
     /// Obtiene todos los permisos de un usuario desde la DB (con cache)
     /// </summary>
-    public HashSet<string> GetUserPermissions(ClaimsPrincipal user)
+    public async Task<HashSet<string>> GetUserPermissionsAsync(ClaimsPrincipal user)
     {
-        if (user?.Identity?.IsAuthenticated != true)
+        var roles = GetUserRoles(user);
+        
+        if (!roles.Any())
             return new HashSet<string>();
 
-        var roles = user.Claims
-            .Where(c => c.Type == Claims.Role)
-            .Select(c => c.Value)
-            .ToList();
+        return await GetUserPermissionsAsync(user, roles);
+    }
 
+    /// <summary>
+    /// Obtiene todos los permisos de un usuario desde la DB (con cache) - versión interna
+    /// </summary>
+    private async Task<HashSet<string>> GetUserPermissionsAsync(ClaimsPrincipal user, List<string> roles)
+    {
         if (!roles.Any())
             return new HashSet<string>();
 
@@ -68,8 +81,8 @@ public class PermissionService
         // Intentar obtener del cache
         if (!_cache.TryGetValue<HashSet<string>>(cacheKey, out var permissions))
         {
-            // No está en cache, obtener de DB
-            permissions = _permissionRepository.GetPermissionsByRolesAsync(roles).GetAwaiter().GetResult();
+            // No está en cache, obtener de DB (ahora con await correctamente)
+            permissions = await _permissionRepository.GetPermissionsByRolesAsync(roles);
 
             // Guardar en cache
             _cache.Set(cacheKey, permissions, CacheDuration);

@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Zirku.Core.Services;
@@ -22,10 +23,10 @@ public class PermissionsController : ControllerBase
     /// Obtiene los permisos del usuario actual (útil para debug y UI)
     /// </summary>
     [HttpGet]
-    public IActionResult Get()
+    public async Task<IActionResult> Get()
     {
         var user = User;
-        var permissions = _permissionService.GetUserPermissions(user);
+        var permissions = await _permissionService.GetUserPermissionsAsync(user);
         var roles = user.Claims
             .Where(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
             .Select(c => c.Value)

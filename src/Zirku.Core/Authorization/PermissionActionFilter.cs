@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Zirku.Core.Services;
@@ -6,9 +7,9 @@ using Zirku.Core.Services;
 namespace Zirku.Core.Authorization;
 
 /// <summary>
-/// Filtro de acción que intercepta controladores con [RequirePermission] y valida los permisos del usuario
+/// Filtro de acción asíncrono que intercepta controladores con [RequirePermission] y valida los permisos del usuario
 /// </summary>
-public class PermissionActionFilter : IActionFilter
+public class PermissionActionFilter : IAsyncActionFilter
 {
     private readonly PermissionService _permissionService;
 
@@ -17,7 +18,7 @@ public class PermissionActionFilter : IActionFilter
         _permissionService = permissionService;
     }
 
-    public void OnActionExecuting(ActionExecutingContext context)
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var user = context.HttpContext.User;
 
@@ -34,15 +35,23 @@ public class PermissionActionFilter : IActionFilter
             .Select(attr => attr.Permission)
             .ToList();
 
-        // Si no hay permisos requeridos, continuar
+        // Si no hay permisos requeridos, continuar con la ejecución
         if (!requiredPermissions.Any())
         {
+            await next();
             return;
         }
 
-        // Validar que el usuario tenga al menos uno de los permisos requeridos
-        var hasPermission = requiredPermissions.Any(permission =>
-            _permissionService.UserHasPermission(user, permission));
+        // Validar que el usuario tenga al menos uno de los permisos requeridos (ahora con await)
+        var hasPermission = false;
+        foreach (var permission in requiredPermissions)
+        {
+            if (await _permissionService.UserHasPermissionAsync(user, permission))
+            {
+                hasPermission = true;
+                break;
+            }
+        }
 
         if (!hasPermission)
         {
@@ -56,12 +65,11 @@ public class PermissionActionFilter : IActionFilter
             {
                 StatusCode = 403
             };
+            return;
         }
-    }
 
-    public void OnActionExecuted(ActionExecutedContext context)
-    {
-        // No se requiere lógica post-ejecución
+        // Usuario tiene permisos, continuar con la ejecución de la acción
+        await next();
     }
 }
 

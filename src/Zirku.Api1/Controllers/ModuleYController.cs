@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Zirku.Core.Authorization;
@@ -25,10 +26,10 @@ public class ModuleYController : ControllerBase
     /// </summary>
     [HttpGet]
     [RequirePermission(PermissionNames.ModuleYRead)]
-    public IActionResult Get()
+    public async Task<IActionResult> Get()
     {
         var user = User;
-        var permissions = _permissionService.GetUserPermissions(user);
+        var permissions = await _permissionService.GetUserPermissionsAsync(user);
 
         return Ok(new
         {
